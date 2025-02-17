@@ -1,3 +1,5 @@
+import { createGraph } from "./createGraph.js";
+
 const embed = async (inputs) => {
   const r = await fetch("https://api.mixedbread.ai/v1/embeddings/", {
     method: "POST",
@@ -15,48 +17,6 @@ const embed = async (inputs) => {
   });
   const json = await r.json();
   return json.data.map((x) => x.embedding);
-};
-const escape = (str) =>
-  str.replace(/[^a-zA-Z0-9]/g, "_").replace(/^(\d)/, "_$1");
-const semiEscape = (str) =>
-  str.replace(/["()]/g, "").replace(/([0-9]+)\. /, "$1 ");
-const createMermaidBoxes = (items) => {
-  const boxes = items.map((item) => `    ${escape(item)}[${semiEscape(item)}]`);
-
-  return ["graph TD", ...boxes].join("\n");
-};
-const similarity = (a, b) => {
-  let dot = 0;
-  let normA = 0;
-  let normB = 0;
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-  return dot / Math.sqrt(normA * normB);
-};
-const isOneGraph = (items, connections) => {
-  const graph = {};
-  for (const item of items) {
-    graph[item] = [];
-  }
-  for (const [a, b] of connections) {
-    graph[a].push(b);
-    graph[b].push(a);
-  }
-  const visited = new Set();
-  const dfs = (node) => {
-    if (visited.has(node)) {
-      return;
-    }
-    visited.add(node);
-    for (const neighbor of graph[node]) {
-      dfs(neighbor);
-    }
-  };
-  dfs(items[0]);
-  return visited.size === items.length;
 };
 
 const inputs =
@@ -79,38 +39,5 @@ Need to make sure the praise is genuine and covers all aspects without sounding 
     .filter(Boolean);
 
 const embeds = await embed(inputs);
-const potentialConnections = [];
-for (let i = 0; i < embeds.length; i++) {
-  for (let j = i + 1; j < embeds.length; j++) {
-    potentialConnections.push({
-      a: inputs[i],
-      b: inputs[j],
-      similarity: similarity(embeds[i], embeds[j]),
-    });
-  }
-}
-potentialConnections.sort((a, b) => b.similarity - a.similarity);
 
-const connections = [];
-// get a few base connections
-for (let i = 0; i < Math.sqrt(inputs.length) * 2; i++) {
-  const { a, b } = potentialConnections.shift();
-  connections.push([a, b]);
-}
-// get one for every item
-for (let i = 0; i < inputs.length; i++) {
-  if (connections.some(([a, b]) => a === inputs[i] || b === inputs[i])) {
-    continue;
-  }
-  const bestConnection = potentialConnections.find(
-    ({ a, b }) => a === inputs[i] || b === inputs[i],
-  );
-  connections.push([bestConnection.a, bestConnection.b]);
-}
-
-let mermaid = createMermaidBoxes(inputs);
-for (const [a, b] of connections) {
-  mermaid += `\n    ${escape(a)} <--> ${escape(b)}`;
-}
-
-console.log(mermaid);
+console.log(createGraph(inputs, embeds, inputs));
